@@ -38,6 +38,7 @@ Known weakness, disclosed rather than fixed: coverage on diesel listings is 85.6
 - Most large errors are whole car models that the price model mis-prices as a group when it has not seen them: budget models such as the Tata Nano (+130% median over-prediction), Mahindra Xylo (+78%) and Tata Indica (+42%), and the reverse for a model with strong resale such as the Toyota Innova (-40%).
 - Error rises with age: 12.5% typical error up to 3 years old, 29.9% beyond 12 years. Listings with missing specs are worse (25.5% vs 17.3%).
 - There is no systematic bias by predicted price. The costly failure for a Deal Score is a *false bargain*: on unseen models the fair price is at least 30% above the listing for 14.3% of listings (9.2% on repeat listings).
+- Adding the car model's identity as a feature (Section 10, tested against a rule fixed in advance) lowers the repeat-listing error from 11.9% to 11.4% and cannot help models the system has not seen. It is not yet used by the saved models.
 
 ## Repository layout
 ```
