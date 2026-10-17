@@ -1,0 +1,5 @@
+# One line-ending convention for every contributor and tool (stops whole-file diffs from CRLF/LF churn on Windows)
+* text=auto eol=lf
+*.ipynb text eol=lf
+*.png binary
+*.joblib binary
