@@ -2,7 +2,7 @@
 
 Is this used-car listing fairly priced? This project predicts a fair price for Indian used-car listings **together with an honest uncertainty range**, then turns the gap between the asking price and that range into a 0-100 *Deal Score*.
 
-**Status: in progress.** Data audit, cleaning, EDA, validation design, model selection and conformal prediction intervals are done. Error analysis, SHAP, the final locked-test result, the Deal Score write-up and the demo app are still to come. The numbers below are development cross-validation, **not** test results.
+**Status: in progress.** Data audit, cleaning, EDA, validation design, model selection, conformal prediction intervals and error analysis are done. SHAP, the final locked-test result, the Deal Score write-up and the demo app are still to come. The numbers below are development cross-validation, **not** test results.
 
 ## Data
 - Source: Kaggle "Vehicle dataset" by Nehal Birla (CarDekho), file `Car details v3.csv`, 8,128 rows. The file is not committed: download it into `data/raw/`.
@@ -33,6 +33,11 @@ Ridge and the boosted models are statistically indistinguishable on unseen car m
 | Repeat listings | 90.5% | 65% |
 
 Known weakness, disclosed rather than fixed: coverage on diesel listings is 85.6% against 91.3% for petrol on unseen models, and none of the three methods tried closed the gap.
+
+## Where the model is wrong (notebook Section 9)
+- Most large errors are whole car models that the price model mis-prices as a group when it has not seen them: budget models such as the Tata Nano (+130% median over-prediction), Mahindra Xylo (+78%) and Tata Indica (+42%), and the reverse for a model with strong resale such as the Toyota Innova (-40%).
+- Error rises with age: 12.5% typical error up to 3 years old, 29.9% beyond 12 years. Listings with missing specs are worse (25.5% vs 17.3%).
+- There is no systematic bias by predicted price. The costly failure for a Deal Score is a *false bargain*: on unseen models the fair price is at least 30% above the listing for 14.3% of listings (9.2% on repeat listings).
 
 ## Repository layout
 ```
