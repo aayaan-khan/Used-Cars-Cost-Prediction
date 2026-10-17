@@ -1,0 +1,148 @@
+"""Deal Score computation module.
+
+Provides a reusable function `deal_score(row_features, listed_price)` that:
+1. Predicts the fair market price using the LightGBM point model.
+2. Predicts the 90% conformalized prediction interval from the selected candidate model (LocallyAdaptiveCQR).
+3. Computes the log gap, percentage gap, interval-normalised position, Deal Score (0-100), and label.
+"""
+
+from pathlib import Path
+import numpy as np
+import pandas as pd
+import joblib
+
+# The interval model is pickled as src.conformal.LocallyAdaptiveCQR, so that module must be
+# importable before joblib.load() runs. Importing it here is what makes the artifact portable.
+try:
+    from . import conformal  # noqa: F401  (normal case: imported as src.deal_score)
+except ImportError:          # run as a plain script from src/: put the repo root on the path
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    from src import conformal  # noqa: F401
+
+# Paths to models (git-ignored; regenerate by running the notebook, see README)
+MODEL_DIR = Path(__file__).resolve().parent.parent / "models"
+POINT_MODEL_PATH = MODEL_DIR / "lightgbm_point_model.joblib"
+INTERVAL_MODEL_PATH = MODEL_DIR / "c_adaptive_cqr_model.joblib"
+
+_point_artifact = None
+_interval_artifact = None
+
+
+def _load_artifacts():
+    global _point_artifact, _interval_artifact
+    if _point_artifact is None:
+        if not POINT_MODEL_PATH.exists():
+            raise FileNotFoundError(f"Point model artifact not found at {POINT_MODEL_PATH}. "
+                                    "Run the notebook (Section 7) to create it.")
+        _point_artifact = joblib.load(POINT_MODEL_PATH)
+    if _interval_artifact is None:
+        if not INTERVAL_MODEL_PATH.exists():
+            raise FileNotFoundError(f"Interval model artifact not found at {INTERVAL_MODEL_PATH}. "
+                                    "Run the notebook (Section 6, Cell 33) to create it.")
+        _interval_artifact = joblib.load(INTERVAL_MODEL_PATH)
+
+def deal_score(row_features, listed_price):
+    """Compute Deal Score (0-100), fair price range, gap %, and label for a vehicle listing.
+
+    Parameters
+    ----------
+    row_features : dict or pd.DataFrame or pd.Series
+        Feature values for the vehicle. Must contain:
+        ['age', 'log_km', 'log_engine', 'log_power', 'seats', 'mileage_val',
+         'fuel', 'transmission', 'owner', 'seller_type', 'brand']
+        (the saved artifact stores the exact list, so extra keys are ignored; log_km = log1p(km_driven),
+        log_engine = log(engine_cc), log_power = log(power_bhp), age = 2020 - year)
+    listed_price : float or int
+        Seller asking price in INR.
+
+    Returns
+    -------
+    dict
+        Dictionary containing:
+        - listed_price: asking price in INR
+        - predicted_price: estimated fair median price in INR
+        - lower_bound: 90% interval lower bound in INR
+        - upper_bound: 90% interval upper bound in INR
+        - gap_log: log(listed_price) - log(predicted_price)
+        - gap_pct: percentage difference relative to predicted price ((listed - pred) / pred * 100)
+        - half_width_log: interval log half-width (uncertainty normaliser)
+        - position: interval-normalised position (gap_log / half_width_log)
+        - deal_score: continuous score from 0 to 100 (50 = fair price, >50 = bargain, <50 = overpriced)
+        - label: 'Underpriced', 'Fair', or 'Overpriced'
+        - graded_label: 5-level label ('Deep Underpriced', 'Moderate Underpriced', 'Fair Price',
+                        'Moderate Overpriced', 'Deep Overpriced')
+    """
+    _load_artifacts()
+    
+    if isinstance(row_features, dict):
+        X = pd.DataFrame([row_features])
+    elif isinstance(row_features, pd.Series):
+        X = row_features.to_frame().T.infer_objects()   # a transposed Series is all-object; restore numeric dtypes
+    elif isinstance(row_features, pd.DataFrame):
+        X = row_features.copy()
+    else:
+        raise TypeError("row_features must be a dict, pd.Series, or pd.DataFrame")
+        
+    features = _point_artifact["features"]
+    X_input = X[features]
+    
+    # Point prediction
+    point_model = _point_artifact["model"]
+    pred_log = float(point_model.predict(X_input)[0])
+    pred_price = float(np.exp(pred_log))
+    
+    # Interval prediction
+    interval_model = _interval_artifact["model"]
+    lo_log_arr, hi_log_arr = interval_model.predict(X_input)
+    lo_log = float(lo_log_arr[0])
+    hi_log = float(hi_log_arr[0])
+    lo_price = float(np.exp(lo_log))
+    hi_price = float(np.exp(hi_log))
+    
+    # Deal metrics
+    listed = float(listed_price)
+    listed_log = float(np.log(listed))
+    gap_log = listed_log - pred_log
+    gap_pct = float((np.exp(gap_log) - 1.0) * 100.0)
+    
+    half_width_log = float((hi_log - lo_log) / 2.0)
+    position = float(gap_log / half_width_log) if half_width_log > 0 else 0.0
+    
+    # Deal Score 0-100: monotone decreasing transform of position
+    # (bargains have negative position -> deal score > 50; overpriced listings have positive position -> deal score < 50)
+    score_val = float(np.clip(50.0 - 25.0 * position, 0.0, 100.0))
+    
+    # 3-level label
+    if listed < lo_price:
+        label = "Underpriced"
+    elif listed > hi_price:
+        label = "Overpriced"
+    else:
+        label = "Fair"
+        
+    # 5-level graded label
+    if position <= -1.0:
+        graded_label = "Deep Underpriced"
+    elif position <= -0.33:
+        graded_label = "Moderate Underpriced"
+    elif position < 0.33:
+        graded_label = "Fair Price"
+    elif position < 1.0:
+        graded_label = "Moderate Overpriced"
+    else:
+        graded_label = "Deep Overpriced"
+        
+    return {
+        "listed_price": listed,
+        "predicted_price": round(pred_price, 2),
+        "lower_bound": round(lo_price, 2),
+        "upper_bound": round(hi_price, 2),
+        "gap_log": round(gap_log, 4),
+        "gap_pct": round(gap_pct, 2),
+        "half_width_log": round(half_width_log, 4),
+        "position": round(position, 4),
+        "deal_score": round(score_val, 1),
+        "label": label,
+        "graded_label": graded_label
+    }
