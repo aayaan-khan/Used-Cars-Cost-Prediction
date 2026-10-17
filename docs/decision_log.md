@@ -22,3 +22,11 @@
 - D20: every model is scored in two regimes: grouped by model (stress test) and random on de-duplicated data (typical repeat listing).
 - D21: model-aware imputation tested and rejected (no consistent gain); this revises D10 to plain median imputation plus indicators.
 - D22: selection rule = one-standard-deviation band on grouped RMSE_log, then best typical-listing MedAPE -> LightGBM (15 leaves, 500 trees, lr 0.03). Final test set untouched.
+- D23: prediction intervals use Conformalized Quantile Regression (CQR) at nominal 90% (alpha=0.10, 5th to 95th percentiles) on log(price) to guarantee distribution-free finite-sample coverage.
+- D24: base quantiles use LightGBM quantile regression (15 leaves, 500 trees, lr 0.03) vs linear QuantileRegressor baseline; linear quantiles over-inflate to 222% width, while LightGBM with CQR delivers competitive 64-87% widths and lower Winkler score.
+- D25: calibration sets are held out strictly by model_key inside training folds (nested 4:1 split) without touching the locked test set.
+- D26: slice diagnostics on unseen models under standard LightGBM_CQR measure 80.8% coverage in true Q1 and 83.5% in true Q5 (vs 93%+ in middle tiers); when sliced by predicted price quintile, coverage is 88.2% (P1), 87.2% (P2), 83.5% (P3), 92.0% (P4), and 90.5% (P5).
+- D27: Mondrian bins are constructed on predicted log-mid-price from the LightGBM quantile base models on the calibration fold; no true price labels are used at fit or inference time, making this variant fully deployable without ground-truth leakage.
+- D28: LightGBM_CQR 5-fold stability measures mean coverage 88.27% +/- 5.13% (grouped) and 89.53% +/- 1.42% (seen); median width measures 86.30% +/- 5.96% (grouped) and 63.98% +/- 2.75% (seen).
+- D29: calibration split sensitivity across 5 random seeds (0, 7, 21, 42, 99) measures global Q_adj range of 0.0169 (min 0.0877, max 0.1046, default seed 42 = 0.0911).
+- D30: fuel slice breakdown by age and predicted price measures lower coverage for diesel in older buckets (80.7% in 8-12 yrs, 79.1% in 13+ yrs vs petrol 91.5% and 87.2%) and lower predicted price quintiles (78.9% in P1 vs petrol 90.5%); reported without causal claims.
