@@ -4,3 +4,21 @@
 - D2: UK audi.csv is only an optional secondary generalisation check, never mixed into training.
 - D3: De-duplicate before any train/test split (1,202 exact duplicate rows found).
 - D4: "torque" is a candidate to drop (inconsistent units).
+- D5: units parsed to numeric; "torque" dropped (inconsistent formats).
+- D6: age = 2020 - year, because the data ends in 2020.
+- D7: custom model_key (218 groups) replaces the naive two-word key.
+- D8: outlier rule is implied km per year > 100,000 (4 rows removed); high-priced cars are kept.
+- D9: 87 CNG/LPG rows report mileage in km/kg, so fuel stays in the model.
+- D10: the 209 rows with missing specs are informative (older, cheaper); no dropna. Impute within model and fuel inside CV folds, plus a missing flag.
+- D11: target is log(price): skew 5.6 -> -0.16, and depreciation is multiplicative.
+- D12: raw brand and mileage comparisons are confounded; report within-model estimates (age -9.8%/yr, 10k km -0.9%, diesel +13.6%, automatic +11.3%, non-first owner -7.7%).
+- D13: final test set is 20% of car models, locked until the last step.
+- D14: development CV is StratifiedGroupKFold (groups = model, stratified by price band).
+- D15: select models on grouped CV, and also report the random-split (seen-model) number.
+- D16: baselines B0 median, B1 median by age, B2 age + log km; bar to clear is MedAPE about 29%.
+- D17: leakage demo: R2 0.934 (duplicates, random) -> 0.906 (de-duplicated, random) -> 0.810 (grouped by model).
+- D18: features exclude model identity; model_key is only the grouping key for validation.
+- D19: all preprocessing (median imputation with missing-indicators, scaling, one-hot) sits inside the pipeline.
+- D20: every model is scored in two regimes: grouped by model (stress test) and random on de-duplicated data (typical repeat listing).
+- D21: model-aware imputation tested and rejected (no consistent gain); this revises D10 to plain median imputation plus indicators.
+- D22: selection rule = one-standard-deviation band on grouped RMSE_log, then best typical-listing MedAPE -> LightGBM (15 leaves, 500 trees, lr 0.03). Final test set untouched.
