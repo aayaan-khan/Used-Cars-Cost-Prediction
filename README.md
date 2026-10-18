@@ -34,6 +34,28 @@ Ridge and the boosted models are statistically indistinguishable on unseen car m
 
 Known weakness, disclosed rather than fixed: coverage on diesel listings is 85.6% against 91.3% for petrol on unseen models, and none of the three methods tried closed the gap.
 
+## Does the Deal Score work? (notebook Section 12)
+
+There are no labelled bargains, so the Deal Score was tested by changing the asking price of held-out listings by a known amount and counting how often it notices, using out-of-fold predictions only. The rules were fixed before the results were seen.
+
+| Deal Score check (development, out-of-fold) | Unseen car models | Repeat listings |
+|---|---|---|
+| Untouched listings flagged either way (false-alarm upper bound) | 11.8% | 9.5% |
+| Detected after a -30% price change | 39% | 54% |
+| Detected after a -20% price change | 22% | 30% |
+| Detected after a -10% price change | 12% | 13% |
+| Detected after a +10% price change | 12% | 13% |
+| Detected after a +20% price change | 21% | 27% |
+| Detected after a +30% price change | 31% | 41% |
+| Median price error, low-confidence vs other listings | 27.6% vs 16.8% | 20.2% vs 10.8% |
+
+![Deal Score detection](reports/figures/deal_score_detection.png)
+
+- **It detects large gaps, not small ones.** A 10% change is barely distinguishable from untouched listings; roughly half of a 50% markup is caught on unseen car models. Read "Overpriced" as "clearly outside what similar listings ask".
+- **The false-alarm figure is an upper bound,** because some untouched listings may really be mispriced.
+- **A low-confidence notice** (car model rare or unknown in the data, car 13+ years old, specs missing) marks listings where the price error is about 1.7-1.9 times larger. It does not lower the false-alarm rate in every regime, so it is shown as a warning next to the label rather than replacing it.
+- Open point: the saved interval model is calibrated on held-out car models, so for well-known models it is wider than the repeat-listing figures above; this is settled before the demo app is built (decision D45).
+
 ## Where the model is wrong (notebook Section 9)
 - Most large errors are whole car models that the price model mis-prices as a group when it has not seen them: budget models such as the Tata Nano (+130% median over-prediction), Mahindra Xylo (+78%) and Tata Indica (+42%), and the reverse for a model with strong resale such as the Toyota Innova (-40%).
 - Error rises with age: 12.5% typical error up to 3 years old, 29.9% beyond 12 years. Listings with missing specs are worse (25.5% vs 17.3%).
@@ -52,7 +74,8 @@ Known weakness, disclosed rather than fixed: coverage on diesel listings is 85.6
 ```
 notebooks/Used_Cars_Cost_Prediction.ipynb   the full analysis, top to bottom
 src/conformal.py                            interval classes (CQR variants)
-src/deal_score.py                           deal_score(features, listed_price)
+src/deal_score.py                           deal_score(features, listed_price): fair price, range, label, confidence notice
+src/deal_validation.py                      price-injection test and confidence-flag tools (notebook Section 12)
 src/explain.py                              explain_listing(features): why the fair price is what it is (SHAP)
 docs/decision_log.md                        every modelling decision, numbered
 data/README.md                              data source, licence, caveats

@@ -15,10 +15,12 @@ import joblib
 # importable before joblib.load() runs. Importing it here is what makes the artifact portable.
 try:
     from . import conformal  # noqa: F401  (normal case: imported as src.deal_score)
+    from . import deal_validation as _dv
 except ImportError:          # run as a plain script from src/: put the repo root on the path
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from src import conformal  # noqa: F401
+    from src import deal_validation as _dv
 
 # Paths to models (git-ignored; regenerate by running the notebook, see README)
 MODEL_DIR = Path(__file__).resolve().parent.parent / "models"
@@ -53,7 +55,7 @@ def _as_frame(row_features):
     raise TypeError("row_features must be a dict, pd.Series, or pd.DataFrame")
 
 
-def deal_score(row_features, listed_price):
+def deal_score(row_features, listed_price, model_counts=None, model_key=None):
     """Compute Deal Score (0-100), fair price range, gap %, and label for a vehicle listing.
 
     Parameters
@@ -66,6 +68,12 @@ def deal_score(row_features, listed_price):
         log_engine = log(engine_cc), log_power = log(power_bhp), age = 2020 - year)
     listed_price : float or int
         Seller asking price in INR.
+    model_counts : pd.Series, optional
+        Number of development listings per car model (``dev.model_key.value_counts()``). Together with
+        ``model_key`` it lets the function warn about rare or unknown car models. Optional; without it
+        only the old-car and missing-specs warnings can be raised.
+    model_key : str, optional
+        The car model of this listing (brand + model, as in the data), used to look up ``model_counts``.
 
     Returns
     -------
@@ -83,6 +91,9 @@ def deal_score(row_features, listed_price):
         - label: 'Underpriced', 'Fair', or 'Overpriced'
         - graded_label: 5-level label ('Deep Underpriced', 'Moderate Underpriced', 'Fair Price',
                         'Moderate Overpriced', 'Deep Overpriced')
+        - low_confidence: True if any warning applies (rare/unknown car model, old car, missing specs;
+                        thresholds in src/deal_validation.py, validated in notebook Section 12)
+        - confidence_reasons: list of the warnings that apply (empty if none)
     """
     _load_artifacts()
     
@@ -137,6 +148,12 @@ def deal_score(row_features, listed_price):
     else:
         graded_label = "Deep Overpriced"
         
+    # Confidence warnings (additive: they do not change any number above)
+    age = float(X["age"].iloc[0])
+    specs_missing = bool(X[["log_engine", "log_power", "seats"]].isna().any(axis=1).iloc[0])
+    n_model = int(model_counts.get(model_key, 0)) if (model_counts is not None and model_key is not None) else None
+    reasons = _dv.confidence_reasons(age, specs_missing, n_model)
+
     return {
         "listed_price": listed,
         "predicted_price": round(pred_price, 2),
@@ -148,5 +165,7 @@ def deal_score(row_features, listed_price):
         "position": round(position, 4),
         "deal_score": round(score_val, 1),
         "label": label,
-        "graded_label": graded_label
+        "graded_label": graded_label,
+        "low_confidence": bool(reasons),
+        "confidence_reasons": reasons,
     }
