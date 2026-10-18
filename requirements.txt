@@ -15,3 +15,5 @@ nbconvert==7.17.2
 nbformat==5.11.1
 ipykernel==7.4.0
 jupyter
+streamlit==1.66.0
+pytest

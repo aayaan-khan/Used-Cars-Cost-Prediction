@@ -2,7 +2,7 @@
 
 Is this used-car listing fairly priced? This project predicts a fair price for Indian used-car listings **together with an honest uncertainty range**, then turns the gap between the asking price and that range into a 0-100 *Deal Score*.
 
-**Status: in progress.** Data audit, cleaning, EDA, validation design, model selection, conformal prediction intervals, error analysis and SHAP explanations are done. Deal Score validation, familiarity routing and the one-shot locked-test evaluation are done; the demo app is still to come. The tables below are development cross-validation unless they say "final test".
+**Status: in progress.** Data audit, cleaning, EDA, validation design, model selection, conformal prediction intervals, error analysis and SHAP explanations are done. Deal Score validation, familiarity routing and the one-shot locked-test evaluation are done; the demo app is built (Step 14). The tables below are development cross-validation unless they say "final test".
 
 ## Data
 - Source: Kaggle "Vehicle dataset" by Nehal Birla (CarDekho), file `Car details v3.csv`, 8,128 rows. The file is not committed: download it into `data/raw/`.
@@ -108,6 +108,15 @@ The system now treats a car model it has seen 10 or more times differently from 
 - Each listing gets a breakdown such as "age +30%, power +10%, diesel +6%", and the factors multiply exactly to the fair price (`src/explain.py`). The Deal Score then says how far the asking price sits from that fair price.
 - These are descriptions of the model on 2020 asking prices, not causal claims. Rated mileage and seats add no usable signal on unseen car models.
 
+## Demo app (Step 14)
+![Demo app](reports/figures/demo_app.png)
+
+A Streamlit app wraps `deal_score` and `explain_listing`: pick a car model (its typical specs pre-fill), enter year, kilometres and asking price, and it shows the 0-100 score, the fair price and range, a confidence badge, and the price drivers. It validates inputs, warns on out-of-range values, and states its limits in the sidebar (2020 asking prices; range holds about 90% for known car models and about 84-88% for unfamiliar ones; the median error is about 11% on known models and 19% on unseen ones in the final test). The app trains nothing; it reads the saved artifacts and `app/model_catalog.json`, both written by the notebook.
+```bash
+streamlit run app/streamlit_app.py     # from the repo root, after the notebook has run
+python -m pytest tests -q              # logic and app smoke tests (skipped if the notebook has not run)
+```
+
 ## Repository layout
 ```
 notebooks/Used_Cars_Cost_Prediction.ipynb   the full analysis, top to bottom
@@ -115,6 +124,9 @@ src/conformal.py                            interval classes (CQR variants)
 src/deal_score.py                           deal_score(features, listed_price, model_key=...): fair price, range, label, confidence notice, route
 src/deal_validation.py                      price-injection test and confidence-flag tools (notebook Section 12)
 src/explain.py                              explain_listing(features): why the fair price is what it is (SHAP)
+src/demo.py                                 input checks and assess(): the logic behind the app
+app/streamlit_app.py                        the demo app; app/model_catalog.json is written by notebook Section 15
+tests/test_demo.py                          tests for the demo logic and the app
 docs/decision_log.md                        every modelling decision, numbered
 data/README.md                              data source, licence, caveats
 models/                                     generated, git-ignored
