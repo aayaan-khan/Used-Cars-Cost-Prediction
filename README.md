@@ -2,7 +2,7 @@
 
 Is this used-car listing fairly priced? This project predicts a fair price for Indian used-car listings **together with an honest uncertainty range**, then turns the gap between the asking price and that range into a 0-100 *Deal Score*.
 
-**Status: in progress.** Data audit, cleaning, EDA, validation design, model selection, conformal prediction intervals and error analysis are done. SHAP, the final locked-test result, the Deal Score write-up and the demo app are still to come. The numbers below are development cross-validation, **not** test results.
+**Status: in progress.** Data audit, cleaning, EDA, validation design, model selection, conformal prediction intervals, error analysis and SHAP explanations are done. The final locked-test result, the Deal Score write-up and the demo app are still to come. The numbers below are development cross-validation, **not** test results.
 
 ## Data
 - Source: Kaggle "Vehicle dataset" by Nehal Birla (CarDekho), file `Car details v3.csv`, 8,128 rows. The file is not committed: download it into `data/raw/`.
@@ -40,11 +40,20 @@ Known weakness, disclosed rather than fixed: coverage on diesel listings is 85.6
 - There is no systematic bias by predicted price. The costly failure for a Deal Score is a *false bargain*: on unseen models the fair price is at least 30% above the listing for 14.3% of listings (9.2% on repeat listings).
 - Adding the car model's identity as a feature (Section 10, tested against a rule fixed in advance) lowers the repeat-listing error from 11.9% to 11.4% and cannot help models the system has not seen. It is not yet used by the saved models.
 
+## What drives the price (notebook Section 11)
+
+![SHAP summary](reports/figures/shap_summary.png)
+
+- Age (39% of the model's price movement) and power (22%) dominate; fuel, brand and engine size follow with about 8% each. The ranking is the same on all five held-out folds of car models and agrees with permutation importance (rank correlation 0.94).
+- Each listing gets a breakdown such as "age +30%, power +10%, diesel +6%", and the factors multiply exactly to the fair price (`src/explain.py`). The Deal Score then says how far the asking price sits from that fair price.
+- These are descriptions of the model on 2020 asking prices, not causal claims. Rated mileage and seats add no usable signal on unseen car models.
+
 ## Repository layout
 ```
 notebooks/Used_Cars_Cost_Prediction.ipynb   the full analysis, top to bottom
 src/conformal.py                            interval classes (CQR variants)
 src/deal_score.py                           deal_score(features, listed_price)
+src/explain.py                              explain_listing(features): why the fair price is what it is (SHAP)
 docs/decision_log.md                        every modelling decision, numbered
 data/README.md                              data source, licence, caveats
 models/                                     generated, git-ignored

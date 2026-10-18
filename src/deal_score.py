@@ -42,6 +42,17 @@ def _load_artifacts():
                                     "Run the notebook (Section 6, Cell 33) to create it.")
         _interval_artifact = joblib.load(INTERVAL_MODEL_PATH)
 
+def _as_frame(row_features):
+    """Turn a dict, Series or DataFrame of listing features into a DataFrame (shared with src/explain.py)."""
+    if isinstance(row_features, dict):
+        return pd.DataFrame([row_features])
+    if isinstance(row_features, pd.Series):
+        return row_features.to_frame().T.infer_objects()   # a transposed Series is all-object; restore numeric dtypes
+    if isinstance(row_features, pd.DataFrame):
+        return row_features.copy()
+    raise TypeError("row_features must be a dict, pd.Series, or pd.DataFrame")
+
+
 def deal_score(row_features, listed_price):
     """Compute Deal Score (0-100), fair price range, gap %, and label for a vehicle listing.
 
@@ -75,15 +86,8 @@ def deal_score(row_features, listed_price):
     """
     _load_artifacts()
     
-    if isinstance(row_features, dict):
-        X = pd.DataFrame([row_features])
-    elif isinstance(row_features, pd.Series):
-        X = row_features.to_frame().T.infer_objects()   # a transposed Series is all-object; restore numeric dtypes
-    elif isinstance(row_features, pd.DataFrame):
-        X = row_features.copy()
-    else:
-        raise TypeError("row_features must be a dict, pd.Series, or pd.DataFrame")
-        
+    X = _as_frame(row_features)
+
     features = _point_artifact["features"]
     X_input = X[features]
     

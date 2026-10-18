@@ -8,6 +8,7 @@ lightgbm==4.7.0
 xgboost==3.4.1
 matplotlib==3.11.2
 joblib==1.6.0
+shap==0.54.1
 
 # Running the notebook and exporting the HTML
 nbconvert==7.17.2
