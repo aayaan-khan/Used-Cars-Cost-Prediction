@@ -33,11 +33,11 @@ except ImportError:                       # run as a plain script from src/: put
 
 # Order shown in tables and figures; the readable name of each driver.
 DRIVERS = ["age", "log_km", "log_engine", "log_power", "seats", "mileage_val", "specs_missing",
-           "fuel", "transmission", "owner", "seller_type", "brand"]
+           "fuel", "transmission", "owner", "seller_type", "brand", "model_key"]
 DRIVER_NAMES = {"age": "Age", "log_km": "Kilometres driven", "log_engine": "Engine size", "log_power": "Power",
                 "seats": "Seats", "mileage_val": "Rated mileage", "specs_missing": "Specs missing in listing",
                 "fuel": "Fuel", "transmission": "Transmission", "owner": "Owner history",
-                "seller_type": "Seller type", "brand": "Brand"}
+                "seller_type": "Seller type", "brand": "Brand", "model_key": "Car model"}
 
 _explainer_cache = {}
 
@@ -64,8 +64,9 @@ def driver_contributions(pipeline, X, features):
     groups = np.array([feature_group(n, features) for n in names])
     explainer = shap.TreeExplainer(model)
     values = explainer.shap_values(cols.transform(X[features]))
+    drivers = [d for d in DRIVERS if d != "model_key" or "model_key" in features]        # 'Car model' only for the identity model
     out = pd.DataFrame({d: values[:, groups == d].sum(axis=1) if (groups == d).any() else np.zeros(len(X))
-                        for d in DRIVERS}, index=X.index)
+                        for d in drivers}, index=X.index)
     return out, float(np.ravel(explainer.expected_value)[0])
 
 
@@ -85,10 +86,12 @@ def _describe(driver, row):
     return str(v)
 
 
-def explain_listing(row_features):
+def explain_listing(row_features, model_key=None, model_counts=None):
     """Explain the fair-price prediction for ONE listing.
 
-    Parameters: the same ``row_features`` as ``deal_score.deal_score`` (dict, Series or one-row DataFrame).
+    Parameters: the same ``row_features``, ``model_key`` and ``model_counts`` as ``deal_score.deal_score``, so the
+    explanation follows the same route (known-model or general) and explains the same fair price. On the
+    known-model route the model also knows the car model's identity, which shows up as the "Car model" driver.
 
     Returns a dict with ``base_price`` (INR, the average listing), ``predicted_price`` (INR, the fair price) and
     ``drivers``: a DataFrame sorted by size of effect with the columns ``driver``, ``value`` (readable),
@@ -96,21 +99,25 @@ def explain_listing(row_features):
     ``base_price`` x the product of all ``factor`` equals ``predicted_price`` (up to rounding).
     """
     _ds._load_artifacts()
-    art = _ds._point_artifact
     X = _ds._as_frame(row_features)
     if len(X) != 1:
         raise ValueError("explain_listing explains one listing at a time")
-    contrib, base_log = driver_contributions(art["model"], X, art["features"])
+    r = _ds.route_for(model_key, model_counts)
+    if r["route"] == "known-model":
+        X = X.assign(model_key=model_key)
+    contrib, base_log = driver_contributions(r["point_model"], X, r["features"])
     row = X.iloc[0]
     log_eff = contrib.iloc[0]
-    table = pd.DataFrame({"driver": [DRIVER_NAMES[d] for d in DRIVERS],
-                          "value": [_describe(d, row) for d in DRIVERS],
-                          "log_effect": [float(log_eff[d]) for d in DRIVERS]})
+    shown = [d for d in DRIVERS if d != "model_key" or r["route"] == "known-model"]      # the general route does not use the identity
+    table = pd.DataFrame({"driver": [DRIVER_NAMES[d] for d in shown],
+                          "value": [_describe(d, row) for d in shown],
+                          "log_effect": [float(log_eff[d]) for d in shown]})
     table["factor"] = np.exp(table.log_effect)
     table["effect_pct"] = (table.factor - 1.0) * 100.0
     table = table.reindex(table.log_effect.abs().sort_values(ascending=False).index).reset_index(drop=True)
     return {"base_price": float(np.exp(base_log)),
             "predicted_price": float(np.exp(base_log + log_eff.sum())),
+            "route": r["route"],
             "drivers": table}
 
 

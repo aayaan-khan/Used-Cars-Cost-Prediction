@@ -2,7 +2,7 @@
 
 Is this used-car listing fairly priced? This project predicts a fair price for Indian used-car listings **together with an honest uncertainty range**, then turns the gap between the asking price and that range into a 0-100 *Deal Score*.
 
-**Status: in progress.** Data audit, cleaning, EDA, validation design, model selection, conformal prediction intervals, error analysis and SHAP explanations are done. The final locked-test result, the Deal Score write-up and the demo app are still to come. The numbers below are development cross-validation, **not** test results.
+**Status: in progress.** Data audit, cleaning, EDA, validation design, model selection, conformal prediction intervals, error analysis and SHAP explanations are done. Deal Score validation and familiarity routing are done too. The final locked-test result and the demo app are still to come. The numbers below are development cross-validation, **not** test results.
 
 ## Data
 - Source: Kaggle "Vehicle dataset" by Nehal Birla (CarDekho), file `Car details v3.csv`, 8,128 rows. The file is not committed: download it into `data/raw/`.
@@ -54,13 +54,32 @@ There are no labelled bargains, so the Deal Score was tested by changing the ask
 - **It detects large gaps, not small ones.** A 10% change is barely distinguishable from untouched listings; roughly half of a 50% markup is caught on unseen car models. Read "Overpriced" as "clearly outside what similar listings ask".
 - **The false-alarm figure is an upper bound,** because some untouched listings may really be mispriced.
 - **A low-confidence notice** (car model rare or unknown in the data, car 13+ years old, specs missing) marks listings where the price error is about 1.7-1.9 times larger. It does not lower the false-alarm rate in every regime, so it is shown as a warning next to the label rather than replacing it.
-- Open point: the saved interval model is calibrated on held-out car models, so for well-known models it is wider than the repeat-listing figures above; this is settled before the demo app is built (decision D45).
+- The range was too wide for well-known car models (the open point of this section, D45); Section 13 below fixes it by routing on familiarity.
 
 ## Where the model is wrong (notebook Section 9)
 - Most large errors are whole car models that the price model mis-prices as a group when it has not seen them: budget models such as the Tata Nano (+130% median over-prediction), Mahindra Xylo (+78%) and Tata Indica (+42%), and the reverse for a model with strong resale such as the Toyota Innova (-40%).
 - Error rises with age: 12.5% typical error up to 3 years old, 29.9% beyond 12 years. Listings with missing specs are worse (25.5% vs 17.3%).
 - There is no systematic bias by predicted price. The costly failure for a Deal Score is a *false bargain*: on unseen models the fair price is at least 30% above the listing for 14.3% of listings (9.2% on repeat listings).
 - Adding the car model's identity as a feature (Section 10, tested against a rule fixed in advance) lowers the repeat-listing error from 11.9% to 11.4% and cannot help models the system has not seen. It is not yet used by the saved models.
+
+## Routing by familiarity (notebook Section 13)
+
+![Routed system](reports/figures/routed_system.png)
+
+The system now treats a car model it has seen 10 or more times differently from one it has not:
+
+| Repeat-listing folds, development | Shipped before | Routed |
+|---|---|---|
+| Median price error, all listings | 11.90% | 11.35% |
+| Range coverage (target 90%) on known car models | 93.7% | 90.6% |
+| Median range width on known car models, % of price | 75% | 62% |
+| Range coverage on rare or unknown car models (unchanged, held-out-model calibration) | 90.1% | 90.1% |
+| Detection of a +20% markup / -20% cut on known car models | 20.0% / 21.0% | 27.8% / 33.0% |
+| Untouched known-model listings flagged either way | 6.3% | 9.4% |
+
+- Known car models get the identity point model (Section 10) and a range calibrated on random listings; everything else keeps the range calibrated on held-out car models, because calibrating those on random listings would under-cover them (84.6%).
+- The rules were fixed before the results were seen; all passed. The coverage of the unfamiliar branch is close to target but its interval (86.9% to 92.7%) is wide because only 416 listings fall in that branch.
+- `deal_score(..., model_key=...)` and `explain_listing(..., model_key=...)` follow the same route, so the fair price, the range, the drivers and the confidence notes always refer to the same model.
 
 ## What drives the price (notebook Section 11)
 
@@ -74,7 +93,7 @@ There are no labelled bargains, so the Deal Score was tested by changing the ask
 ```
 notebooks/Used_Cars_Cost_Prediction.ipynb   the full analysis, top to bottom
 src/conformal.py                            interval classes (CQR variants)
-src/deal_score.py                           deal_score(features, listed_price): fair price, range, label, confidence notice
+src/deal_score.py                           deal_score(features, listed_price, model_key=...): fair price, range, label, confidence notice, route
 src/deal_validation.py                      price-injection test and confidence-flag tools (notebook Section 12)
 src/explain.py                              explain_listing(features): why the fair price is what it is (SHAP)
 docs/decision_log.md                        every modelling decision, numbered
@@ -93,7 +112,7 @@ cd notebooks
 jupyter nbconvert --to notebook --execute --inplace Used_Cars_Cost_Prediction.ipynb   # about 5-10 minutes, depending on your CPU
 jupyter nbconvert --to html Used_Cars_Cost_Prediction.ipynb
 ```
-Running the notebook also **regenerates the four files in `models/`**, which are not committed (pickled models only load under compatible library versions). Old `.joblib` files from before `src/conformal.py` existed will not load; delete them and re-run.
+Running the notebook also **regenerates the five files in `models/`**, which are not committed (pickled models only load under compatible library versions). Old `.joblib` files from before `src/conformal.py` existed will not load; delete them and re-run.
 
 Try the Deal Score once the notebook has run (from the repo root):
 ```python
@@ -103,7 +122,7 @@ from src.deal_score import deal_score
 car = {"age": 6, "log_km": math.log1p(70000), "log_engine": math.log(1248), "log_power": math.log(81.8),
        "seats": 5, "mileage_val": 19.5, "fuel": "Diesel", "transmission": "Manual",
        "owner": "First Owner", "seller_type": "Individual", "brand": "Maruti"}
-deal_score(car, listed_price=450000)   # fair price, 90% range, gap %, 0-100 score and label
+deal_score(car, 450000, model_key="Maruti Swift")   # fair price, 90% range, gap %, 0-100 score, label, confidence, route
 ```
 
 ## Limitations
