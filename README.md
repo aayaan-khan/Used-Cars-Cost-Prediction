@@ -2,7 +2,7 @@
 
 Is this used-car listing fairly priced? This project predicts a fair price for Indian used-car listings **together with an honest uncertainty range**, then turns the gap between the asking price and that range into a 0-100 *Deal Score*.
 
-**Status: in progress.** Data audit, cleaning, EDA, validation design, model selection, conformal prediction intervals, error analysis and SHAP explanations are done. Deal Score validation and familiarity routing are done too. The final locked-test result and the demo app are still to come. The numbers below are development cross-validation, **not** test results.
+**Status: in progress.** Data audit, cleaning, EDA, validation design, model selection, conformal prediction intervals, error analysis and SHAP explanations are done. Deal Score validation, familiarity routing and the one-shot locked-test evaluation are done; the demo app is still to come. The tables below are development cross-validation unless they say "final test".
 
 ## Data
 - Source: Kaggle "Vehicle dataset" by Nehal Birla (CarDekho), file `Car details v3.csv`, 8,128 rows. The file is not committed: download it into `data/raw/`.
@@ -55,6 +55,25 @@ There are no labelled bargains, so the Deal Score was tested by changing the ask
 - **The false-alarm figure is an upper bound,** because some untouched listings may really be mispriced.
 - **A low-confidence notice** (car model rare or unknown in the data, car 13+ years old, specs missing) marks listings where the price error is about 1.7-1.9 times larger. It does not lower the false-alarm rate in every regime, so it is shown as a warning next to the label rather than replacing it.
 - The range was too wide for well-known car models (the open point of this section, D45); Section 13 below fixes it by routing on familiarity.
+
+## Final test (notebook Section 14, locked test set, run once)
+
+![Final test](reports/figures/final_test.png)
+
+The criteria were committed to git before the test was run (commit `c86f112`). The test holds 1,392 listings of 42 car models the system has never seen, so it measures the stress-test regime only; it cannot test the known-model route of Section 13.
+
+| | Development CV (unseen models) | Final test |
+|---|---|---|
+| Median price error | 17.6% | **19.1%** (best baseline: 34.2%) |
+| R² on log price | 0.851 | 0.847 |
+| 90% range coverage | 88.2% | **84.1%** (interval over car models: 77.0% to 89.4%) |
+| Median range width, % of price | 85.7% | 80.6% |
+| Untouched listings flagged either way | 11.8% | 15.9% |
+
+**Result: the primary criterion failed.** Accuracy criteria (T1) all passed and the range width (T2b) passed, but range coverage (T2a) was 84.1% against a pre-set floor of 85%. Two secondary criteria also failed (T3a detection of a 20% markup 30% vs 21% in development; T3c untouched flags 15.9% vs a 15% cap). One was not evaluable (only 21 test listings with missing specs). Nothing was re-fitted or relaxed afterwards.
+
+- **Why (post-hoc, after seeing the result):** coverage is 75% for 0-3 year-old cars (89% in development) and low for a few whole car models (Maruti Alto 800 61%, Tata Zest 67%, Honda Amaze 74%), the same "whole models mispriced" pattern as Section 9. With only 42 car models the coverage estimate is noisy (77% to 89%), and development folds ranged from 82% to 94%, so 84% is not out of line; the pre-set floor was tighter than that noise allowed.
+- **What to take from it:** for a car model the system has never seen, expect the "90% range" to contain the asking price about 84% to 88% of the time, and treat the Deal Score on very new cars as weaker.
 
 ## Where the model is wrong (notebook Section 9)
 - Most large errors are whole car models that the price model mis-prices as a group when it has not seen them: budget models such as the Tata Nano (+130% median over-prediction), Mahindra Xylo (+78%) and Tata Indica (+42%), and the reverse for a model with strong resale such as the Toyota Innova (-40%).
