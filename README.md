@@ -2,7 +2,13 @@
 
 Is this used-car listing fairly priced? This project predicts a fair price for Indian used-car listings **together with an honest uncertainty range**, then turns the gap between the asking price and that range into a 0-100 *Deal Score*.
 
-**Status: in progress.** Data audit, cleaning, EDA, validation design, model selection, conformal prediction intervals, error analysis and SHAP explanations are done. Deal Score validation, familiarity routing and the one-shot locked-test evaluation are done; the demo app is built (Step 14). The tables below are development cross-validation unless they say "final test".
+**Status: complete.** Data audit, cleaning, EDA, grouped validation, model selection, conformal ranges, error analysis, SHAP explanations, Deal Score validation, familiarity routing, a pre-registered one-shot final test, and a demo app. The tables below are development cross-validation unless they say "final test".
+
+## At a glance
+- **Fair-price accuracy:** median error about 11% for car models the system knows (10+ listings), 19% on a sealed test of 42 car models it had never seen (best simple baseline: 34%).
+- **Honest range:** the 90% range contained the asking price 90.6% of the time for known models in development, and 84.1% on the final test of unseen models. That test missed its pre-registered 85% floor, and the result is reported as a failure, not repaired.
+- **Deal Score (0-100):** the asking price's position inside that range. It reliably catches large gaps only (a 20% markup is detected 21-30% of the time), so it is a screening aid, not a verdict.
+- **Rigour:** duplicates removed before splitting, validation by whole car model, rules committed to git before results, every decision in the [decision log](docs/decision_log.md) (D1-D52).
 
 ## Data
 - Source: Kaggle "Vehicle dataset" by Nehal Birla (CarDekho), file `Car details v3.csv`, 8,128 rows. The file is not committed: download it into `data/raw/`.
@@ -79,7 +85,7 @@ The criteria were committed to git before the test was run (commit `c86f112`). T
 - Most large errors are whole car models that the price model mis-prices as a group when it has not seen them: budget models such as the Tata Nano (+130% median over-prediction), Mahindra Xylo (+78%) and Tata Indica (+42%), and the reverse for a model with strong resale such as the Toyota Innova (-40%).
 - Error rises with age: 12.5% typical error up to 3 years old, 29.9% beyond 12 years. Listings with missing specs are worse (25.5% vs 17.3%).
 - There is no systematic bias by predicted price. The costly failure for a Deal Score is a *false bargain*: on unseen models the fair price is at least 30% above the listing for 14.3% of listings (9.2% on repeat listings).
-- Adding the car model's identity as a feature (Section 10, tested against a rule fixed in advance) lowers the repeat-listing error from 11.9% to 11.4% and cannot help models the system has not seen. It is not yet used by the saved models.
+- Adding the car model's identity as a feature (Section 10, tested against a rule fixed in advance) lowers the repeat-listing error from 11.9% to 11.4% and cannot help models the system has not seen. It is used for known car models only (Section 13).
 
 ## Routing by familiarity (notebook Section 13)
 
@@ -155,6 +161,11 @@ car = {"age": 6, "log_km": math.log1p(70000), "log_engine": math.log(1248), "log
        "owner": "First Owner", "seller_type": "Individual", "brand": "Maruti"}
 deal_score(car, 450000, model_key="Maruti Swift")   # fair price, 90% range, gap %, 0-100 score, label, confidence, route
 ```
+
+## Version 2 (not done, and why)
+- **Age-conditional calibration.** The final test showed the range is too narrow for 0-3 year-old cars (75% coverage) and too wide for 13+ year-old cars (98%). Calibrating the range per age band is the obvious fix; it was not applied because the test set is spent, so it would need fresh data to validate.
+- **Newer data and a city column.** The data end in 2020 and have no city. A current scrape would make the demo usable on today's market.
+- **Sale prices instead of asking prices**, which would change what "fair" means.
 
 ## Limitations
 - A Deal Score compares an asking price with what similar *listings* cost. It cannot see condition, accident history, city or negotiation, so it is not a verdict on the car.
