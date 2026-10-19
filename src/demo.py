@@ -5,6 +5,7 @@ and returns plain-language text next to the numbers. Nothing here fits or change
 """
 
 import json
+import math
 from pathlib import Path
 import numpy as np
 
@@ -15,7 +16,8 @@ except ImportError:                                   # run as a plain script: p
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
     from src import deal_score as ds, explain as xp
 
-REF_YEAR = 2020                                       # the data ends in 2020, so the market it describes is the 2020 market
+REF_YEAR = 2020
+MIN_YEAR = 1990                                       # the data ends in 2020, so the market it describes is the 2020 market
 CATALOG_PATH = Path(__file__).resolve().parent.parent / "app" / "model_catalog.json"
 FUELS = ["Diesel", "Petrol", "CNG", "LPG"]
 TRANSMISSIONS = ["Manual", "Automatic"]
@@ -61,16 +63,29 @@ def build_row(i):
 def check_inputs(i):
     """Raise ValueError for impossible input; return a list of soft warnings for unusual input."""
     warnings = []
-    if not (1995 <= int(i["year"]) <= REF_YEAR):
-        raise ValueError(f"Model year must be between 1995 and {REF_YEAR}: the data describes the {REF_YEAR} market.")
+    for k, name in (("year", "Model year"), ("km", "Kilometres driven"), ("asking_price", "Asking price")):
+        try:
+            v = float(i[k])
+        except (TypeError, ValueError, KeyError):
+            raise ValueError(f"{name} must be a number.")
+        if not math.isfinite(v):
+            raise ValueError(f"{name} must be a finite number.")
+    for k, name in (("engine_cc", "Engine size"), ("power_bhp", "Power"), ("seats", "Seats"), ("mileage", "Rated mileage")):
+        v = _num(i.get(k))
+        if v is not None and (not math.isfinite(v) or v <= 0):
+            raise ValueError(f"{name} must be a positive number (or leave it unknown).")
+    for k, allowed, name in (("fuel", FUELS, "Fuel"), ("transmission", TRANSMISSIONS, "Transmission"),
+                             ("owner", OWNERS, "Owner"), ("seller_type", SELLERS, "Seller")):
+        if i.get(k) not in allowed:
+            raise ValueError(f"{name} must be one of: {', '.join(allowed)}.")
+    if not (MIN_YEAR <= float(i["year"]) <= REF_YEAR):
+        raise ValueError(f"Model year must be between {MIN_YEAR} and {REF_YEAR}: the data describes the {REF_YEAR} market.")
     if float(i["km"]) < 0:
         raise ValueError("Kilometres driven cannot be negative.")
     if float(i["asking_price"]) <= 0:
         raise ValueError("The asking price must be positive.")
-    for k, name in (("engine_cc", "Engine size"), ("power_bhp", "Power")):
-        v = _num(i.get(k))
-        if v is not None and v <= 0:
-            raise ValueError(f"{name} must be positive (or leave it unknown).")
+    if float(i["year"]) < 1995:
+        warnings.append("Cars from before 1995 are very rare in the data; treat the result with extra care.")
     if float(i["km"]) > 400_000:
         warnings.append("More than 400,000 km is far outside the data; treat the result with extra care.")
     if not (30_000 <= float(i["asking_price"]) <= 12_000_000):

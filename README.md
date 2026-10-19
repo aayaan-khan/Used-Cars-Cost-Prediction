@@ -120,7 +120,7 @@ The system now treats a car model it has seen 10 or more times differently from 
 A Streamlit app wraps `deal_score` and `explain_listing`: pick a car model (its typical specs pre-fill), enter year, kilometres and asking price, and it shows the 0-100 score, the fair price and range, a confidence badge, and the price drivers. It validates inputs, warns on out-of-range values, and states its limits in the sidebar (2020 asking prices; range holds about 90% for known car models and about 84-88% for unfamiliar ones; the median error is about 11% on known models and 19% on unseen ones in the final test). The app trains nothing; it reads the saved artifacts and `app/model_catalog.json`, both written by the notebook.
 ```bash
 streamlit run app/streamlit_app.py     # from the repo root, after the notebook has run
-python -m pytest tests -q              # logic and app smoke tests (skipped if the notebook has not run)
+python -m pytest tests -q              # 19 tests, about 2 minutes (skipped if the notebook has not run)
 ```
 
 ## Repository layout

@@ -11,7 +11,6 @@ sys.path.insert(0, str(ROOT))
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-import numpy as np
 import streamlit as st
 
 from src import demo, deal_score as ds
@@ -62,7 +61,7 @@ def prefill():
             if v is not None:
                 st.session_state[k] = float(v)
         st.session_state.fuel, st.session_state.transmission = m["fuel"], m["transmission"]
-        st.session_state.year = int(min(max(m["year_max"] - 2, m["year_min"]), demo.REF_YEAR))
+        st.session_state.year = int(min(max(m["year_max"] - 2, m["year_min"], demo.MIN_YEAR), demo.REF_YEAR))
 
 
 def on_brand():
@@ -119,7 +118,7 @@ with left:
     c1.selectbox("Brand", BRANDS, key="brand", on_change=on_brand)
     c2.selectbox("Car model", model_options(st.session_state.brand), key="model_label", on_change=prefill)
     c3, c4 = st.columns(2)
-    c3.number_input("Model year", min_value=1995, max_value=demo.REF_YEAR, step=1, key="year")
+    c3.number_input("Model year", min_value=demo.MIN_YEAR, max_value=demo.REF_YEAR, step=1, key="year")
     c4.number_input("Kilometres driven", min_value=0, max_value=1_000_000, step=1000, key="km")
     c5, c6 = st.columns(2)
     c5.selectbox("Fuel", demo.FUELS, key="fuel")

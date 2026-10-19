@@ -15,5 +15,7 @@ nbconvert==7.17.2
 nbformat==5.11.1
 ipykernel==7.4.0
 jupyter
+
+# Demo app and tests
 streamlit==1.66.0
-pytest
+pytest==9.1.1

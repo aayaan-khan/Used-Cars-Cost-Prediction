@@ -35,10 +35,33 @@ def test_missing_specs_gives_low_confidence():
     assert r["confidence"] == "Low"
 
 
-@pytest.mark.parametrize("bad", [{"year": 1980}, {"year": 2025}, {"km": -1}, {"asking_price": 0}, {"engine_cc": -5}])
+@pytest.mark.parametrize("bad", [{"year": 1980}, {"year": 2025}, {"km": -1}, {"asking_price": 0}, {"engine_cc": -5}, {"asking_price": float("nan")},
+                                 {"asking_price": float("inf")}, {"km": float("nan")}, {"fuel": "Hydrogen"}, {"owner": "Nobody"}, {"seats": 0}, {"year": "abc"}])
 def test_bad_inputs_raise(bad):
     with pytest.raises(ValueError):
         demo.assess({**BASE, **bad})
+
+
+def test_every_catalogue_model_scores():
+    import math
+    for m in demo.load_catalog()["models"]:
+        r = demo.assess({**BASE, "brand": m["brand"], "model_key": m["model_key"], "fuel": m["fuel"], "transmission": m["transmission"],
+                         "engine_cc": m["engine_cc"], "power_bhp": m["power_bhp"], "seats": m["seats"], "mileage": m["mileage_val"],
+                         "year": max(min(m["year_max"], demo.REF_YEAR), demo.MIN_YEAR)})
+        s = r["score"]
+        assert all(math.isfinite(s[k]) for k in ("deal_score", "predicted_price", "lower_bound", "upper_bound")), m["model_key"]
+        assert s["lower_bound"] <= s["predicted_price"] <= s["upper_bound"], m["model_key"]
+
+
+def test_app_every_brand_and_model():
+    from streamlit.testing.v1 import AppTest
+    at = AppTest.from_file(str(ROOT / "app" / "streamlit_app.py"), default_timeout=120).run()
+    for brand in at.selectbox(key="brand").options:
+        at.selectbox(key="brand").select(brand).run()
+        assert not at.exception, brand
+        for label in at.selectbox(key="model_label").options:
+            at.selectbox(key="model_label").select(label).run()
+            assert not at.exception, (brand, label)
 
 
 def test_app_smoke():
